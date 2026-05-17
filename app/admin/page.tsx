@@ -6,142 +6,48 @@ import Navbar from '@/components/Navbar'
 
 export default function AdminPage() {
 
-  const [profile, setProfile] = useState<any>(null)
+  const [products, setProducts] = useState<any[]>([])
+  const [users, setUsers] = useState<any[]>([])
+  const [topups, setTopups] = useState<any[]>([])
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [price, setPrice] = useState('')
 
-  const [products, setProducts] = useState<any[]>([])
   const [selectedProduct, setSelectedProduct] = useState('')
   const [productKey, setProductKey] = useState('')
-  const [users, setUsers] = useState<any[]>([])
-const [selectedUser, setSelectedUser] = useState('')
-const [balanceAmount, setBalanceAmount] = useState('')
-const [topups, setTopups] = useState<any[]>([])
+
+  const [selectedUser, setSelectedUser] = useState('')
+  const [balanceAmount, setBalanceAmount] = useState('')
 
   useEffect(() => {
     checkAdmin()
     getProducts()
     getUsers()
+    getTopups()
   }, [])
 
-  async function addProduct() {
-    async function getUsers() {
+  async function checkAdmin() {
 
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-    
-      setUsers(data || [])
-    }
-    
-    async function addBalance() {
-      async function getTopups() {
+    const {
+      data: { user }
+    } = await supabase.auth.getUser()
 
-        const { data } = await supabase
-          .from('topups')
-          .select('*')
-          .eq('status', 'pending')
-      
-        setTopups(data || [])
-      }
-      
-      async function approveTopup(topup: any) {
-      
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', topup.user_id)
-          .single()
-      
-        if (!profile) return
-      
-        const newBalance =
-          Number(profile.balance) + Number(topup.amount)
-      
-        await supabase
-          .from('profiles')
-          .update({
-            balance: newBalance
-          })
-          .eq('id', topup.user_id)
-      
-        await supabase
-          .from('topups')
-          .update({
-            status: 'approved'
-          })
-          .eq('id', topup.id)
-      
-        await supabase
-          .from('balance_logs')
-          .insert({
-            user_id: topup.user_id,
-            amount: topup.amount,
-            type: 'topup'
-          })
-      
-        alert('Top up approved!')
-      
-        getTopups()
-      }
-    
-      const userData = users.find(
-        (u) => u.id === selectedUser
-      )
-    
-      if (!userData) {
-        alert('User tidak ditemukan!')
-        return
-      }
-    
-      const newBalance =
-        Number(userData.balance) + Number(balanceAmount)
-    
-      await supabase
-        .from('profiles')
-        .update({
-          balance: newBalance
-        })
-        .eq('id', selectedUser)
-    
-      await supabase
-        .from('balance_logs')
-        .insert({
-          user_id: selectedUser,
-          amount: Number(balanceAmount),
-          type: 'admin_add'
-        })
-    
-      alert('Saldo berhasil ditambahkan!')
-    
-      setBalanceAmount('')
-    
-      getUsers()
-      getTopups()
-    }
-
-    const { error } = await supabase
-      .from('products')
-      .insert({
-        name,
-        description,
-        price: Number(price),
-      })
-
-    if (error) {
-      alert(error.message)
+    if (!user) {
+      window.location.href = '/'
       return
     }
 
-    alert('Produk berhasil ditambahkan!')
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
 
-    setName('')
-    setDescription('')
-    setPrice('')
-
-    getProducts()
+    if (data?.role !== 'owner') {
+      alert('ACCESS DENIED')
+      window.location.href = '/'
+    }
   }
 
   async function getProducts() {
@@ -153,13 +59,33 @@ const [topups, setTopups] = useState<any[]>([])
     setProducts(data || [])
   }
 
-  async function addProductKey() {
+  async function getUsers() {
+
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+
+    setUsers(data || [])
+  }
+
+  async function getTopups() {
+
+    const { data } = await supabase
+      .from('topups')
+      .select('*')
+      .eq('status', 'pending')
+
+    setTopups(data || [])
+  }
+
+  async function addProduct() {
 
     const { error } = await supabase
-      .from('product_keys')
+      .from('products')
       .insert({
-        product_id: selectedProduct,
-        product_key: productKey,
+        name,
+        description,
+        price: Number(price)
       })
 
     if (error) {
@@ -167,45 +93,111 @@ const [topups, setTopups] = useState<any[]>([])
       return
     }
 
-    alert('Stock key berhasil ditambahkan!')
+    alert('Product added!')
+
+    setName('')
+    setDescription('')
+    setPrice('')
+
+    getProducts()
+  }
+
+  async function addProductKey() {
+
+    const { error } = await supabase
+      .from('product_keys')
+      .insert({
+        product_id: selectedProduct,
+        product_key: productKey,
+        is_sold: false
+      })
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    alert('Key added!')
 
     setProductKey('')
+
+    getProducts()
   }
 
-  async function checkAdmin() {
+  async function addBalance() {
 
-    const {
-      data: { user }
-    } = await supabase.auth.getUser()
+    const userData = users.find(
+      (u) => u.id === selectedUser
+    )
 
-    if (!user) return
+    if (!userData) {
+      alert('User tidak ditemukan!')
+      return
+    }
 
-    const { data } = await supabase
+    const newBalance =
+      Number(userData.balance) + Number(balanceAmount)
+
+    await supabase
+      .from('profiles')
+      .update({
+        balance: newBalance
+      })
+      .eq('id', selectedUser)
+
+    await supabase
+      .from('balance_logs')
+      .insert({
+        user_id: selectedUser,
+        amount: Number(balanceAmount),
+        type: 'admin_add'
+      })
+
+    alert('Saldo berhasil ditambahkan!')
+
+    setBalanceAmount('')
+
+    getUsers()
+  }
+
+  async function approveTopup(topup: any) {
+
+    const { data: profile } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', user.id)
+      .eq('id', topup.user_id)
       .single()
 
-    setProfile(data)
-  }
+    if (!profile) return
 
-  if (!profile) {
-    return (
-      <main className="min-h-screen bg-black text-white flex items-center justify-center">
-        Loading...
-      </main>
-    )
-  }
+    const newBalance =
+      Number(profile.balance) + Number(topup.amount)
 
-  if (
-    profile.role !== 'admin' &&
-    profile.role !== 'owner'
-  ) {
-    return (
-      <main className="min-h-screen bg-black text-red-500 flex items-center justify-center text-4xl">
-        ACCESS DENIED
-      </main>
-    )
+    await supabase
+      .from('profiles')
+      .update({
+        balance: newBalance
+      })
+      .eq('id', topup.user_id)
+
+    await supabase
+      .from('topups')
+      .update({
+        status: 'approved'
+      })
+      .eq('id', topup.id)
+
+    await supabase
+      .from('balance_logs')
+      .insert({
+        user_id: topup.user_id,
+        amount: topup.amount,
+        type: 'topup'
+      })
+
+    alert('Topup approved!')
+
+    getTopups()
   }
 
   return (
@@ -216,16 +208,12 @@ const [topups, setTopups] = useState<any[]>([])
       <div className="p-10">
 
         <h1 className="text-6xl font-bold text-red-500">
-          ADMIN PANEL
+          OWNER PANEL
         </h1>
 
-        <p className="mt-4 text-green-400 text-2xl">
-          Welcome {profile.email}
-        </p>
+        <div className="bg-zinc-900 border border-red-500 rounded-2xl p-8 mt-10">
 
-        <div className="bg-zinc-900 border border-green-500 rounded-2xl p-8 mt-10">
-
-          <h2 className="text-4xl font-bold text-green-400">
+          <h2 className="text-4xl font-bold text-red-400">
             ADD PRODUCT
           </h2>
 
@@ -237,7 +225,8 @@ const [topups, setTopups] = useState<any[]>([])
             className="w-full mt-6 p-3 rounded-xl bg-zinc-800"
           />
 
-          <textarea
+          <input
+            type="text"
             placeholder="Description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -254,17 +243,17 @@ const [topups, setTopups] = useState<any[]>([])
 
           <button
             onClick={addProduct}
-            className="mt-6 bg-green-500 hover:bg-green-600 px-6 py-3 rounded-xl"
+            className="mt-6 bg-red-500 hover:bg-red-600 px-6 py-3 rounded-xl"
           >
             ADD PRODUCT
           </button>
 
         </div>
 
-        <div className="bg-zinc-900 border border-yellow-500 rounded-2xl p-8 mt-10">
+        <div className="bg-zinc-900 border border-green-500 rounded-2xl p-8 mt-10">
 
-          <h2 className="text-4xl font-bold text-yellow-400">
-            ADD STOCK KEY
+          <h2 className="text-4xl font-bold text-green-400">
+            ADD PRODUCT KEY
           </h2>
 
           <select
@@ -278,105 +267,109 @@ const [topups, setTopups] = useState<any[]>([])
             </option>
 
             {products.map((item) => (
+
               <option key={item.id} value={item.id}>
                 {item.name}
               </option>
+
             ))}
 
           </select>
 
           <textarea
-            placeholder="Product Key / MediaFire Link"
+            placeholder="Product Key / Link"
             value={productKey}
             onChange={(e) => setProductKey(e.target.value)}
-            className="w-full mt-4 p-3 rounded-xl bg-zinc-800"
+            className="w-full mt-4 p-3 rounded-xl bg-zinc-800 h-40"
           />
 
           <button
             onClick={addProductKey}
-            className="mt-6 bg-yellow-500 hover:bg-yellow-600 px-6 py-3 rounded-xl"
+            className="mt-6 bg-green-500 hover:bg-green-600 px-6 py-3 rounded-xl"
           >
-            ADD STOCK
+            ADD KEY
           </button>
-          <div className="bg-zinc-900 border border-cyan-500 rounded-2xl p-8 mt-10">
 
-  <h2 className="text-4xl font-bold text-cyan-400">
-    USER BALANCE
-  </h2>
+        </div>
 
-  <select
-    value={selectedUser}
-    onChange={(e) => setSelectedUser(e.target.value)}
-    className="w-full mt-6 p-3 rounded-xl bg-zinc-800"
-  >
+        <div className="bg-zinc-900 border border-cyan-500 rounded-2xl p-8 mt-10">
 
-    <option value="">
-      Select User
-    </option>
+          <h2 className="text-4xl font-bold text-cyan-400">
+            USER BALANCE
+          </h2>
 
-    {users.map((item) => (
+          <select
+            value={selectedUser}
+            onChange={(e) => setSelectedUser(e.target.value)}
+            className="w-full mt-6 p-3 rounded-xl bg-zinc-800"
+          >
 
-      <option key={item.id} value={item.id}>
-        {item.email} - Rp {item.balance}
-      </option>
+            <option value="">
+              Select User
+            </option>
 
-    ))}
+            {users.map((item) => (
 
-  </select>
+              <option key={item.id} value={item.id}>
+                {item.email} - Rp {item.balance}
+              </option>
 
-  <input
-    type="number"
-    placeholder="Balance Amount"
-    value={balanceAmount}
-    onChange={(e) => setBalanceAmount(e.target.value)}
-    className="w-full mt-4 p-3 rounded-xl bg-zinc-800"
-  />
+            ))}
 
-  <button
-    onClick={addBalance}
-    className="mt-6 bg-cyan-500 hover:bg-cyan-600 px-6 py-3 rounded-xl"
-  >
-    ADD BALANCE
-  </button>
-  <div className="bg-zinc-900 border border-pink-500 rounded-2xl p-8 mt-10">
+          </select>
 
-  <h2 className="text-4xl font-bold text-pink-400">
-    TOP UP REQUESTS
-  </h2>
+          <input
+            type="number"
+            placeholder="Balance Amount"
+            value={balanceAmount}
+            onChange={(e) => setBalanceAmount(e.target.value)}
+            className="w-full mt-4 p-3 rounded-xl bg-zinc-800"
+          />
 
-  <div className="grid grid-cols-1 gap-6 mt-6">
+          <button
+            onClick={addBalance}
+            className="mt-6 bg-cyan-500 hover:bg-cyan-600 px-6 py-3 rounded-xl"
+          >
+            ADD BALANCE
+          </button>
 
-    {topups.map((item) => (
+        </div>
 
-      <div
-        key={item.id}
-        className="bg-zinc-800 rounded-2xl p-6"
-      >
+        <div className="bg-zinc-900 border border-pink-500 rounded-2xl p-8 mt-10">
 
-        <p>
-          USER ID: {item.user_id}
-        </p>
+          <h2 className="text-4xl font-bold text-pink-400">
+            TOPUP REQUESTS
+          </h2>
 
-        <p className="mt-3">
-          Amount: Rp {item.amount}
-        </p>
+          <div className="grid grid-cols-1 gap-6 mt-6">
 
-        <button
-          onClick={() => approveTopup(item)}
-          className="mt-5 bg-pink-500 hover:bg-pink-600 px-5 py-2 rounded-xl"
-        >
-          APPROVE
-        </button>
+            {topups.map((item) => (
 
-      </div>
+              <div
+                key={item.id}
+                className="bg-zinc-800 rounded-2xl p-6"
+              >
 
-    ))}
+                <p>
+                  USER ID: {item.user_id}
+                </p>
 
-  </div>
+                <p className="mt-3">
+                  Amount: Rp {item.amount}
+                </p>
 
-</div>
+                <button
+                  onClick={() => approveTopup(item)}
+                  className="mt-5 bg-pink-500 hover:bg-pink-600 px-5 py-2 rounded-xl"
+                >
+                  APPROVE
+                </button>
 
-</div>
+              </div>
+
+            ))}
+
+          </div>
 
         </div>
 
